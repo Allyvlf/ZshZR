@@ -114,19 +114,91 @@ const TasksPage: React.FC = () => {
     }
   }, [currentUserProfile, userRole]);
 
+  // ========== LOAD TASK ATTACHMENTS WHEN TASKS CHANGE ==========
+  useEffect(() => {
+    const loadTaskAttachmentsCached = async () => {
+      if (!tasks || tasks.length === 0) return;
+
+      setTaskAttachments((prevMap) => {
+        const newMap = new Map(prevMap);
+        let tasksToLoad = 0;
+
+        // Only load attachments for tasks that don't have cached attachments yet
+        for (const task of tasks) {
+          if (!newMap.has(task.id)) {
+            tasksToLoad++;
+          }
+        }
+
+        if (tasksToLoad === 0) {
+          // All tasks already have cached attachments
+          return prevMap;
+        }
+
+        console.log(`[TasksPage] Loading attachments for ${tasksToLoad}/${tasks.length} tasks (cached: ${prevMap.size})`);
+
+        // Load attachments in background without blocking UI
+        (async () => {
+          for (const task of tasks) {
+            if (!newMap.has(task.id)) {
+              const attachments = await getTaskAttachments(task.id);
+              if (attachments.length > 0) {
+                console.log(`[TasksPage] Loaded ${attachments.length} attachments for task ${task.id}`);
+              }
+              newMap.set(task.id, attachments as FileAttachment[]);
+              // Update state incrementally
+              setTaskAttachments(new Map(newMap));
+            }
+          }
+        })();
+
+        return prevMap;
+      });
+    };
+
+    loadTaskAttachmentsCached();
+  }, [tasks, getTaskAttachments]);
+
   // ========== LOAD TODO ATTACHMENTS ==========
   useEffect(() => {
     const loadTodoAttachments = async () => {
-      if (todoItems && todoItems.length > 0) {
-        const todoAttachmentsMap = new Map<string, FileAttachment[]>();
+      if (!todoItems || todoItems.length === 0) return;
 
+      setTodoAttachments((prevMap) => {
+        const newMap = new Map(prevMap);
+        let todosToLoad = 0;
+
+        // Only load attachments for todos that don't have cached attachments yet
         for (const todo of todoItems) {
-          const attachments = await getTaskAttachments(todo.task_id);
-          todoAttachmentsMap.set(todo.id, attachments as FileAttachment[]);
+          if (!newMap.has(todo.id)) {
+            todosToLoad++;
+          }
         }
 
-        setTodoAttachments(todoAttachmentsMap);
-      }
+        if (todosToLoad === 0) {
+          // All todos already have cached attachments
+          return prevMap;
+        }
+
+        console.log(`[TasksPage] Loading attachments for ${todosToLoad}/${todoItems.length} todos (cached: ${prevMap.size})`);
+
+        // Load attachments in background without blocking UI
+        (async () => {
+          for (const todo of todoItems) {
+            if (!newMap.has(todo.id)) {
+              const attachments = await getTaskAttachments(todo.task_id);
+              if (attachments.length > 0) {
+                console.log(`[TasksPage] Loaded ${attachments.length} attachments for todo task ${todo.task_id}`);
+              }
+              newMap.set(todo.id, attachments as FileAttachment[]);
+              // Update state incrementally
+              setTodoAttachments(new Map(newMap));
+            }
+          }
+        })();
+
+        return prevMap;
+      });
     };
 
     loadTodoAttachments();
@@ -218,17 +290,27 @@ const TasksPage: React.FC = () => {
         } = await supabase.auth.getUser();
         setCurrentUser(user);
 
+        let profileData: any = null;
+
         // Get current user's profile and role
         if (user) {
-          const { data: profileData } = await supabase
+          const { data: fetchedProfileData, error: profileError } = await supabase
             .from("user_profiles")
             .select("*")
             .eq("user_id", user.id)
             .single();
 
-          if (profileData) {
-            setCurrentUserProfile(profileData);
-            setUserRole(profileData.role as "guest" | "manager" | "service_provider");
+          if (profileError) {
+            console.warn(`[loadData] Failed to fetch user profile for ${user.id}:`, {
+              code: profileError.code,
+              message: profileError.message,
+            });
+          }
+
+          if (fetchedProfileData) {
+            profileData = fetchedProfileData;
+            setCurrentUserProfile(fetchedProfileData);
+            setUserRole(fetchedProfileData.role as "guest" | "manager" | "service_provider");
           }
         }
 
@@ -296,12 +378,20 @@ const TasksPage: React.FC = () => {
         setTaskProposals(proposalsData || []);
 
         // Load todo list items
-        if (user && profileData?.role === "service_provider") {
-          const { data: todosData } = await supabase
+        if (user && profileData && profileData.role === "service_provider") {
+          const { data: todosData, error: todosError } = await supabase
             .from("todo_list")
             .select("*")
             .eq("provider_id", profileData.id)
             .order("created_at", { ascending: false });
+
+          if (todosError) {
+            console.warn(`[loadData] Failed to fetch todos for provider ${profileData.id}:`, {
+              code: todosError.code,
+              message: todosError.message,
+            });
+          }
+
           setTodoItems(todosData || []);
         }
 
@@ -462,11 +552,18 @@ const TasksPage: React.FC = () => {
       if (taskError) throw taskError;
 
       if (createdTask && fileAttachments.length > 0) {
+        const linkResults = [];
         for (const attachment of fileAttachments) {
           const success = await linkToTask(attachment.attachmentId, createdTask.id);
+          linkResults.push({ attachmentId: attachment.attachmentId, success });
           if (!success) {
-            console.warn(`Failed to link attachment ${attachment.attachmentId} to task`);
+            console.warn(`[handleCreateTask] Failed to link attachment ${attachment.attachmentId}`);
           }
+        }
+
+        const failedCount = linkResults.filter(r => !r.success).length;
+        if (failedCount > 0) {
+          console.error(`[handleCreateTask] ${failedCount}/${fileAttachments.length} attachment links failed`);
         }
       }
 
@@ -482,6 +579,10 @@ const TasksPage: React.FC = () => {
       setTasks(tasksData || []);
 
       const newAttachments = await getTaskAttachments(createdTask.id);
+      if (fileAttachments.length > 0 && newAttachments.length === 0) {
+        console.error(`[handleCreateTask] Attachments were linked but retrieval returned 0`);
+      }
+
       setTaskAttachments((prev) => {
         const updated = new Map(prev);
         updated.set(createdTask.id, newAttachments as FileAttachment[]);

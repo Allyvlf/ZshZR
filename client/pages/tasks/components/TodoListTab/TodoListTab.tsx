@@ -81,7 +81,7 @@ const TodoListTab: React.FC<TodoListTabProps> = ({
   const getUnrespondedAssignedTasks = () => {
     if (!currentUserProfile || userRole !== "service_provider") return [];
 
-    return tasks.filter((task) => {
+    const unresponded = tasks.filter((task) => {
       const isAssignedToMe = task.assigned_to === currentUserProfile.id;
       if (!isAssignedToMe) return false;
 
@@ -93,6 +93,19 @@ const TodoListTab: React.FC<TodoListTabProps> = ({
 
       return !hasResponse;
     });
+
+    // Log attachment status for debugging
+    unresponded.forEach((task) => {
+      const attachments = taskAttachments.get(task.id);
+      if (!attachments || attachments.length === 0) {
+        console.debug(
+          `[getUnrespondedAssignedTasks] Task ${task.id} has no cached attachments`,
+          { taskId: task.id, hasCachedAttachments: attachments?.length ?? 0 }
+        );
+      }
+    });
+
+    return unresponded;
   };
 
   // Helper: Get pending proposals for current service provider
