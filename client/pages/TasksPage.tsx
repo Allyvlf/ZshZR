@@ -114,14 +114,40 @@ const TasksPage: React.FC = () => {
     }
   }, [currentUserProfile, userRole]);
 
+  // ========== LOAD TASK ATTACHMENTS WHEN TASKS CHANGE ==========
+  useEffect(() => {
+    const loadTaskAttachmentsCached = async () => {
+      if (!tasks || tasks.length === 0) return;
+
+      console.log(`[TasksPage] Reloading ${tasks.length} task attachments`);
+      const attachmentsMap = new Map<string, FileAttachment[]>();
+
+      for (const task of tasks) {
+        const attachments = await getTaskAttachments(task.id);
+        if (attachments.length > 0) {
+          console.log(`[TasksPage] Loaded ${attachments.length} attachments for task ${task.id}`);
+        }
+        attachmentsMap.set(task.id, attachments as FileAttachment[]);
+      }
+
+      setTaskAttachments(attachmentsMap);
+    };
+
+    loadTaskAttachmentsCached();
+  }, [tasks, getTaskAttachments]);
+
   // ========== LOAD TODO ATTACHMENTS ==========
   useEffect(() => {
     const loadTodoAttachments = async () => {
       if (todoItems && todoItems.length > 0) {
+        console.log(`[TasksPage] Reloading ${todoItems.length} todo attachments`);
         const todoAttachmentsMap = new Map<string, FileAttachment[]>();
 
         for (const todo of todoItems) {
           const attachments = await getTaskAttachments(todo.task_id);
+          if (attachments.length > 0) {
+            console.log(`[TasksPage] Loaded ${attachments.length} attachments for todo task ${todo.task_id}`);
+          }
           todoAttachmentsMap.set(todo.id, attachments as FileAttachment[]);
         }
 
@@ -218,17 +244,27 @@ const TasksPage: React.FC = () => {
         } = await supabase.auth.getUser();
         setCurrentUser(user);
 
+        let profileData: any = null;
+
         // Get current user's profile and role
         if (user) {
-          const { data: profileData } = await supabase
+          const { data: fetchedProfileData, error: profileError } = await supabase
             .from("user_profiles")
             .select("*")
             .eq("user_id", user.id)
             .single();
 
-          if (profileData) {
-            setCurrentUserProfile(profileData);
-            setUserRole(profileData.role as "guest" | "manager" | "service_provider");
+          if (profileError) {
+            console.warn(`[loadData] Failed to fetch user profile for ${user.id}:`, {
+              code: profileError.code,
+              message: profileError.message,
+            });
+          }
+
+          if (fetchedProfileData) {
+            profileData = fetchedProfileData;
+            setCurrentUserProfile(fetchedProfileData);
+            setUserRole(fetchedProfileData.role as "guest" | "manager" | "service_provider");
           }
         }
 
@@ -296,12 +332,20 @@ const TasksPage: React.FC = () => {
         setTaskProposals(proposalsData || []);
 
         // Load todo list items
-        if (user && profileData?.role === "service_provider") {
-          const { data: todosData } = await supabase
+        if (user && profileData && profileData.role === "service_provider") {
+          const { data: todosData, error: todosError } = await supabase
             .from("todo_list")
             .select("*")
             .eq("provider_id", profileData.id)
             .order("created_at", { ascending: false });
+
+          if (todosError) {
+            console.warn(`[loadData] Failed to fetch todos for provider ${profileData.id}:`, {
+              code: todosError.code,
+              message: todosError.message,
+            });
+          }
+
           setTodoItems(todosData || []);
         }
 
