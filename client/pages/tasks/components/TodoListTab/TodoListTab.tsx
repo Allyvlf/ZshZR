@@ -184,14 +184,14 @@ const TodoListTab: React.FC<TodoListTabProps> = ({
                       <div className="space-y-1">
                         {taskAttachments.get(task.id)!.map((attachment) => (
                           <a
-                            key={attachment.id}
-                            href={attachment.url}
+                            key={attachment.attachmentId}
+                            href={attachment.publicUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs text-sheraton-gold hover:underline block truncate"
-                            title={attachment.name}
+                            title={attachment.filename || attachment.originalName}
                           >
-                            📎 {attachment.name}
+                            📎 {attachment.filename || attachment.originalName}
                           </a>
                         ))}
                       </div>
