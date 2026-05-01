@@ -462,12 +462,25 @@ const TasksPage: React.FC = () => {
       if (taskError) throw taskError;
 
       if (createdTask && fileAttachments.length > 0) {
+        console.log(`[handleCreateTask] Linking ${fileAttachments.length} attachments to task ${createdTask.id}`, {
+          attachmentIds: fileAttachments.map(a => a.attachmentId),
+        });
+
+        const linkResults = [];
         for (const attachment of fileAttachments) {
           const success = await linkToTask(attachment.attachmentId, createdTask.id);
+          linkResults.push({ attachmentId: attachment.attachmentId, success });
           if (!success) {
-            console.warn(`Failed to link attachment ${attachment.attachmentId} to task`);
+            console.warn(`[handleCreateTask] Failed to link attachment ${attachment.attachmentId} to task ${createdTask.id}`);
           }
         }
+
+        const failedCount = linkResults.filter(r => !r.success).length;
+        if (failedCount > 0) {
+          console.error(`[handleCreateTask] ${failedCount}/${fileAttachments.length} attachment links failed`, { linkResults });
+        }
+      } else if (createdTask && fileAttachments.length === 0) {
+        console.log(`[handleCreateTask] Task created with no attachments`, { taskId: createdTask.id });
       }
 
       toast({
@@ -481,7 +494,22 @@ const TasksPage: React.FC = () => {
         .order("created_at", { ascending: false });
       setTasks(tasksData || []);
 
+      console.log(`[handleCreateTask] Retrieving attachments for newly created task ${createdTask.id}`);
       const newAttachments = await getTaskAttachments(createdTask.id);
+
+      if (newAttachments.length > 0) {
+        console.log(`[handleCreateTask] Successfully retrieved ${newAttachments.length} attachments`, {
+          taskId: createdTask.id,
+          attachmentIds: newAttachments.map(a => a.attachmentId),
+        });
+      } else if (fileAttachments.length > 0) {
+        console.error(`[handleCreateTask] Attachments were linked but retrieval returned 0`, {
+          taskId: createdTask.id,
+          expectedCount: fileAttachments.length,
+          actualCount: newAttachments.length,
+        });
+      }
+
       setTaskAttachments((prev) => {
         const updated = new Map(prev);
         updated.set(createdTask.id, newAttachments as FileAttachment[]);

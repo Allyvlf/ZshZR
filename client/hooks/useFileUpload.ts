@@ -169,13 +169,31 @@ export function useFileUpload() {
           });
 
         if (error) {
-          console.error('Failed to link attachment to task:', error);
+          console.error(`[linkToTask] Failed to create junction record:`, {
+            taskId,
+            attachmentId,
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+          });
+
+          // Specific error context
+          if (error.code === '23503') {
+            console.error(
+              `[linkToTask] Foreign key constraint violation - verify that:`,
+              { taskId, attachmentId, checkIssue: 'taskId or attachmentId does not exist in their respective tables' }
+            );
+          } else if (error.code === '23505') {
+            console.warn(`[linkToTask] Duplicate junction record (attachment already linked to task)`, { taskId, attachmentId });
+          }
+
           return false;
         }
 
         return true;
       } catch (error) {
-        console.error('Error linking attachment:', error);
+        console.error(`[linkToTask] Unexpected error:`, { taskId, attachmentId, error });
         return false;
       }
     },
@@ -196,13 +214,31 @@ export function useFileUpload() {
           });
 
         if (error) {
-          console.error('Failed to link attachment to complaint:', error);
+          console.error(`[linkToComplaint] Failed to create junction record:`, {
+            complaintId,
+            attachmentId,
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+          });
+
+          // Specific error context
+          if (error.code === '23503') {
+            console.error(
+              `[linkToComplaint] Foreign key constraint violation - verify that:`,
+              { complaintId, attachmentId, checkIssue: 'complaintId or attachmentId does not exist in their respective tables' }
+            );
+          } else if (error.code === '23505') {
+            console.warn(`[linkToComplaint] Duplicate junction record (attachment already linked to complaint)`, { complaintId, attachmentId });
+          }
+
           return false;
         }
 
         return true;
       } catch (error) {
-        console.error('Error linking attachment:', error);
+        console.error(`[linkToComplaint] Unexpected error:`, { complaintId, attachmentId, error });
         return false;
       }
     },
@@ -232,24 +268,63 @@ export function useFileUpload() {
           .eq('task_id', taskId);
 
         if (error) {
-          console.error('Failed to fetch task attachments:', error);
+          console.error(`[getTaskAttachments] Database error for task ${taskId}:`, {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+          });
           return [];
         }
 
-        return (data || []).map((row: any) => {
-          const att = row.attachments;
-          return {
-            attachmentId: att.id,
-            publicUrl: att.b2_url,
-            filename: att.filename,
-            originalName: att.original_name,
-            fileSize: att.file_size,
-            mimeType: att.mime_type,
-            fileType: att.file_type,
-          };
-        });
+        if (!data) {
+          console.warn(`[getTaskAttachments] No data returned from junction table for task ${taskId}`);
+          return [];
+        }
+
+        const attachments = data
+          .map((row: any) => {
+            // Check if relationship was resolved
+            if (!row.attachments) {
+              console.warn(
+                `[getTaskAttachments] Broken relationship - task_attachments.attachment_id=${row.attachment_id} has no matching attachment record in attachments table`,
+                { taskId, attachmentId: row.attachment_id }
+              );
+              return null;
+            }
+
+            const att = row.attachments;
+
+            // Validate required fields
+            if (!att.id || !att.b2_url) {
+              console.error(
+                `[getTaskAttachments] Invalid attachment record - missing id or b2_url`,
+                { taskId, attachment: att }
+              );
+              return null;
+            }
+
+            return {
+              attachmentId: att.id,
+              publicUrl: att.b2_url,
+              filename: att.filename || '',
+              originalName: att.original_name || '',
+              fileSize: att.file_size || 0,
+              mimeType: att.mime_type || 'application/octet-stream',
+              fileType: att.file_type || 'file',
+            };
+          })
+          .filter((att) => att !== null);
+
+        if (data.length > 0 && attachments.length === 0) {
+          console.error(
+            `[getTaskAttachments] All ${data.length} junction records had broken relationships`,
+            { taskId }
+          );
+        }
+
+        return attachments;
       } catch (error) {
-        console.error('Error fetching task attachments:', error);
+        console.error(`[getTaskAttachments] Unexpected error for task ${taskId}:`, error);
         return [];
       }
     },
@@ -279,24 +354,63 @@ export function useFileUpload() {
           .eq('complaint_id', complaintId);
 
         if (error) {
-          console.error('Failed to fetch complaint attachments:', error);
+          console.error(`[getComplaintAttachments] Database error for complaint ${complaintId}:`, {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+          });
           return [];
         }
 
-        return (data || []).map((row: any) => {
-          const att = row.attachments;
-          return {
-            attachmentId: att.id,
-            publicUrl: att.b2_url,
-            filename: att.filename,
-            originalName: att.original_name,
-            fileSize: att.file_size,
-            mimeType: att.mime_type,
-            fileType: att.file_type,
-          };
-        });
+        if (!data) {
+          console.warn(`[getComplaintAttachments] No data returned from junction table for complaint ${complaintId}`);
+          return [];
+        }
+
+        const attachments = data
+          .map((row: any) => {
+            // Check if relationship was resolved
+            if (!row.attachments) {
+              console.warn(
+                `[getComplaintAttachments] Broken relationship - complaint_attachments.attachment_id=${row.attachment_id} has no matching attachment record in attachments table`,
+                { complaintId, attachmentId: row.attachment_id }
+              );
+              return null;
+            }
+
+            const att = row.attachments;
+
+            // Validate required fields
+            if (!att.id || !att.b2_url) {
+              console.error(
+                `[getComplaintAttachments] Invalid attachment record - missing id or b2_url`,
+                { complaintId, attachment: att }
+              );
+              return null;
+            }
+
+            return {
+              attachmentId: att.id,
+              publicUrl: att.b2_url,
+              filename: att.filename || '',
+              originalName: att.original_name || '',
+              fileSize: att.file_size || 0,
+              mimeType: att.mime_type || 'application/octet-stream',
+              fileType: att.file_type || 'file',
+            };
+          })
+          .filter((att) => att !== null);
+
+        if (data.length > 0 && attachments.length === 0) {
+          console.error(
+            `[getComplaintAttachments] All ${data.length} junction records had broken relationships`,
+            { complaintId }
+          );
+        }
+
+        return attachments;
       } catch (error) {
-        console.error('Error fetching complaint attachments:', error);
+        console.error(`[getComplaintAttachments] Unexpected error for complaint ${complaintId}:`, error);
         return [];
       }
     },
