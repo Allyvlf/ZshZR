@@ -286,8 +286,8 @@ export function useFileUpload() {
             // Check if relationship was resolved
             if (!row.attachments) {
               console.warn(
-                `[getTaskAttachments] Broken relationship - task_attachments.attachment_id=${row.attachment_id} has no matching attachment record in attachments table`,
-                { taskId, attachmentId: row.attachment_id }
+                `[getTaskAttachments] Broken relationship: attachment_id=${row.attachment_id} not found in attachments table`,
+                { taskId }
               );
               return null;
             }
@@ -297,8 +297,8 @@ export function useFileUpload() {
             // Validate required fields
             if (!att.id || !att.b2_url) {
               console.error(
-                `[getTaskAttachments] Invalid attachment record - missing id or b2_url`,
-                { taskId, attachment: att }
+                `[getTaskAttachments] Invalid attachment: missing id or b2_url`,
+                { taskId }
               );
               return null;
             }
@@ -317,8 +317,8 @@ export function useFileUpload() {
 
         if (data.length > 0 && attachments.length === 0) {
           console.error(
-            `[getTaskAttachments] All ${data.length} junction records had broken relationships`,
-            { taskId }
+            `[getTaskAttachments] All junction records had broken relationships`,
+            { taskId, count: data.length }
           );
         }
 
@@ -372,8 +372,8 @@ export function useFileUpload() {
             // Check if relationship was resolved
             if (!row.attachments) {
               console.warn(
-                `[getComplaintAttachments] Broken relationship - complaint_attachments.attachment_id=${row.attachment_id} has no matching attachment record in attachments table`,
-                { complaintId, attachmentId: row.attachment_id }
+                `[getComplaintAttachments] Broken relationship: attachment_id=${row.attachment_id} not found`,
+                { complaintId }
               );
               return null;
             }
@@ -383,8 +383,8 @@ export function useFileUpload() {
             // Validate required fields
             if (!att.id || !att.b2_url) {
               console.error(
-                `[getComplaintAttachments] Invalid attachment record - missing id or b2_url`,
-                { complaintId, attachment: att }
+                `[getComplaintAttachments] Invalid attachment: missing id or b2_url`,
+                { complaintId }
               );
               return null;
             }
@@ -403,8 +403,8 @@ export function useFileUpload() {
 
         if (data.length > 0 && attachments.length === 0) {
           console.error(
-            `[getComplaintAttachments] All ${data.length} junction records had broken relationships`,
-            { complaintId }
+            `[getComplaintAttachments] All junction records had broken relationships`,
+            { complaintId, count: data.length }
           );
         }
 

@@ -119,18 +119,41 @@ const TasksPage: React.FC = () => {
     const loadTaskAttachmentsCached = async () => {
       if (!tasks || tasks.length === 0) return;
 
-      console.log(`[TasksPage] Reloading ${tasks.length} task attachments`);
-      const attachmentsMap = new Map<string, FileAttachment[]>();
+      setTaskAttachments((prevMap) => {
+        const newMap = new Map(prevMap);
+        let tasksToLoad = 0;
 
-      for (const task of tasks) {
-        const attachments = await getTaskAttachments(task.id);
-        if (attachments.length > 0) {
-          console.log(`[TasksPage] Loaded ${attachments.length} attachments for task ${task.id}`);
+        // Only load attachments for tasks that don't have cached attachments yet
+        for (const task of tasks) {
+          if (!newMap.has(task.id)) {
+            tasksToLoad++;
+          }
         }
-        attachmentsMap.set(task.id, attachments as FileAttachment[]);
-      }
 
-      setTaskAttachments(attachmentsMap);
+        if (tasksToLoad === 0) {
+          // All tasks already have cached attachments
+          return prevMap;
+        }
+
+        console.log(`[TasksPage] Loading attachments for ${tasksToLoad}/${tasks.length} tasks (cached: ${prevMap.size})`);
+
+        // Load attachments in background without blocking UI
+        (async () => {
+          for (const task of tasks) {
+            if (!newMap.has(task.id)) {
+              const attachments = await getTaskAttachments(task.id);
+              if (attachments.length > 0) {
+                console.log(`[TasksPage] Loaded ${attachments.length} attachments for task ${task.id}`);
+              }
+              newMap.set(task.id, attachments as FileAttachment[]);
+              // Update state incrementally
+              setTaskAttachments(new Map(newMap));
+            }
+          }
+        })();
+
+        return prevMap;
+      });
     };
 
     loadTaskAttachmentsCached();
@@ -139,20 +162,43 @@ const TasksPage: React.FC = () => {
   // ========== LOAD TODO ATTACHMENTS ==========
   useEffect(() => {
     const loadTodoAttachments = async () => {
-      if (todoItems && todoItems.length > 0) {
-        console.log(`[TasksPage] Reloading ${todoItems.length} todo attachments`);
-        const todoAttachmentsMap = new Map<string, FileAttachment[]>();
+      if (!todoItems || todoItems.length === 0) return;
 
+      setTodoAttachments((prevMap) => {
+        const newMap = new Map(prevMap);
+        let todosToLoad = 0;
+
+        // Only load attachments for todos that don't have cached attachments yet
         for (const todo of todoItems) {
-          const attachments = await getTaskAttachments(todo.task_id);
-          if (attachments.length > 0) {
-            console.log(`[TasksPage] Loaded ${attachments.length} attachments for todo task ${todo.task_id}`);
+          if (!newMap.has(todo.id)) {
+            todosToLoad++;
           }
-          todoAttachmentsMap.set(todo.id, attachments as FileAttachment[]);
         }
 
-        setTodoAttachments(todoAttachmentsMap);
-      }
+        if (todosToLoad === 0) {
+          // All todos already have cached attachments
+          return prevMap;
+        }
+
+        console.log(`[TasksPage] Loading attachments for ${todosToLoad}/${todoItems.length} todos (cached: ${prevMap.size})`);
+
+        // Load attachments in background without blocking UI
+        (async () => {
+          for (const todo of todoItems) {
+            if (!newMap.has(todo.id)) {
+              const attachments = await getTaskAttachments(todo.task_id);
+              if (attachments.length > 0) {
+                console.log(`[TasksPage] Loaded ${attachments.length} attachments for todo task ${todo.task_id}`);
+              }
+              newMap.set(todo.id, attachments as FileAttachment[]);
+              // Update state incrementally
+              setTodoAttachments(new Map(newMap));
+            }
+          }
+        })();
+
+        return prevMap;
+      });
     };
 
     loadTodoAttachments();
@@ -506,25 +552,19 @@ const TasksPage: React.FC = () => {
       if (taskError) throw taskError;
 
       if (createdTask && fileAttachments.length > 0) {
-        console.log(`[handleCreateTask] Linking ${fileAttachments.length} attachments to task ${createdTask.id}`, {
-          attachmentIds: fileAttachments.map(a => a.attachmentId),
-        });
-
         const linkResults = [];
         for (const attachment of fileAttachments) {
           const success = await linkToTask(attachment.attachmentId, createdTask.id);
           linkResults.push({ attachmentId: attachment.attachmentId, success });
           if (!success) {
-            console.warn(`[handleCreateTask] Failed to link attachment ${attachment.attachmentId} to task ${createdTask.id}`);
+            console.warn(`[handleCreateTask] Failed to link attachment ${attachment.attachmentId}`);
           }
         }
 
         const failedCount = linkResults.filter(r => !r.success).length;
         if (failedCount > 0) {
-          console.error(`[handleCreateTask] ${failedCount}/${fileAttachments.length} attachment links failed`, { linkResults });
+          console.error(`[handleCreateTask] ${failedCount}/${fileAttachments.length} attachment links failed`);
         }
-      } else if (createdTask && fileAttachments.length === 0) {
-        console.log(`[handleCreateTask] Task created with no attachments`, { taskId: createdTask.id });
       }
 
       toast({
@@ -538,20 +578,9 @@ const TasksPage: React.FC = () => {
         .order("created_at", { ascending: false });
       setTasks(tasksData || []);
 
-      console.log(`[handleCreateTask] Retrieving attachments for newly created task ${createdTask.id}`);
       const newAttachments = await getTaskAttachments(createdTask.id);
-
-      if (newAttachments.length > 0) {
-        console.log(`[handleCreateTask] Successfully retrieved ${newAttachments.length} attachments`, {
-          taskId: createdTask.id,
-          attachmentIds: newAttachments.map(a => a.attachmentId),
-        });
-      } else if (fileAttachments.length > 0) {
-        console.error(`[handleCreateTask] Attachments were linked but retrieval returned 0`, {
-          taskId: createdTask.id,
-          expectedCount: fileAttachments.length,
-          actualCount: newAttachments.length,
-        });
+      if (fileAttachments.length > 0 && newAttachments.length === 0) {
+        console.error(`[handleCreateTask] Attachments were linked but retrieval returned 0`);
       }
 
       setTaskAttachments((prev) => {
