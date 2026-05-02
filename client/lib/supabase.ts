@@ -151,3 +151,95 @@ export interface TaskMessageAttachment {
   attachment_id: string
   created_at: string
 }
+
+// ============================================================================
+// TASK REPORTS FEATURE TYPES
+// ============================================================================
+
+export interface TaskChecklist {
+  id: string
+  task_id: string
+  title: string
+  description: string | null
+  order_index: number
+  is_optional: boolean
+  created_at: string
+}
+
+export interface TaskEvidenceRequirement {
+  id: string
+  task_id: string
+  evidence_type: 'image' | 'video' | 'file' | 'any'
+  description: string | null
+  is_required: boolean
+  max_files: number | null
+  created_at: string
+}
+
+export interface TaskReport {
+  id: string
+  task_id: string
+  provider_id: string
+  status: 'in_progress' | 'submitted' | 'approved' | 'rejected'
+  progress_percentage: number
+  summary: string | null
+
+  submitted_at: string | null
+  submitted_notes: string | null
+  approved_at: string | null
+  approved_by: string | null
+  approval_notes: string | null
+  rejected_at: string | null
+  rejected_by: string | null
+  rejection_reason: string | null
+
+  created_at: string
+  updated_at: string
+}
+
+export interface ReportChecklistItem {
+  id: string
+  report_id: string
+  checklist_item_id: string
+  is_checked: boolean
+  checked_at: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ReportEvidence {
+  id: string
+  report_id: string
+  attachment_id: string
+  evidence_type: 'image' | 'video' | 'file'
+  description: string | null
+  created_at: string
+}
+
+export interface TaskIssue {
+  id: string
+  report_id: string
+  title: string
+  description: string
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  status: 'open' | 'acknowledged' | 'in_resolution' | 'resolved'
+
+  created_by: string
+  assigned_to: string | null
+  resolved_at: string | null
+  resolution_notes: string | null
+
+  created_at: string
+  updated_at: string
+}
+
+export interface ReportActivityLog {
+  id: string
+  report_id: string
+  action: string  // 'created', 'updated', 'checklist_checked', 'evidence_added', etc.
+  actor_id: string
+  actor_role: 'service_provider' | 'manager'
+  details: Record<string, any> | null
+  created_at: string
+}
