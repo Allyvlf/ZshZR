@@ -13,6 +13,7 @@ const TabsNavigation: React.FC<TabsNavigationProps> = ({
     { id: "new-task", label: "New Task" },
     { id: "todo-list", label: "To Do List" },
     { id: "live-chat", label: "Live Chat" },
+    { id: "reports", label: "Reports" },
   ];
 
   return (

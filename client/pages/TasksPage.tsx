@@ -14,6 +14,7 @@ import TabsNavigation from "./tasks/components/TabsNavigation";
 import NewTaskTab from "./tasks/components/NewTaskTab/NewTaskTab";
 import TodoListTab from "./tasks/components/TodoListTab/TodoListTab";
 import LiveChatTab from "./tasks/components/LiveChatTab/LiveChatTab";
+import ReportsTab from "./tasks/components/ReportsTab/ReportsTab";
 
 interface TaskUI extends TaskType {
   category?: "operations" | "service" | "training" | "maintenance";
@@ -42,6 +43,7 @@ const TasksPage: React.FC = () => {
   const getTabFromPath = () => {
     if (location.pathname.includes("/tasks/list")) return "todo-list";
     if (location.pathname.includes("/tasks/chat")) return "live-chat";
+    if (location.pathname.includes("/tasks/reports")) return "reports";
     return "new-task";
   };
 
@@ -725,6 +727,15 @@ const TasksPage: React.FC = () => {
               userRole={userRole}
               onTaskSelect={setSelectedTask}
               onTabChange={handleTabChange}
+            />
+          </TabsContent>
+
+          {/* Reports Tab */}
+          <TabsContent value="reports" className="space-y-6">
+            <ReportsTab
+              currentUser={currentUser}
+              currentUserProfile={currentUserProfile}
+              userRole={userRole || "guest"}
             />
           </TabsContent>
         </Tabs>
